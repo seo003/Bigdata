@@ -5,6 +5,7 @@ import datetime
 import time
 import json
 
+
 # 클라이언트 ID와 비밀번호를 JSON 파일에서 읽어오기
 def load_client_credentials(filename='/content/drive/MyDrive/Colab Notebooks/project/bigdata/naver_client.json'):
     with open(filename, 'r') as f:
