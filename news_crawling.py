@@ -1,10 +1,6 @@
-import os
-import sys
 import urllib.request
 import datetime
-import time
 import json
-
 
 # client id, pw를 JSON 파일에서 읽어오기
 def load_client_info(filename='naver_client.json'):
@@ -13,80 +9,65 @@ def load_client_info(filename='naver_client.json'):
     return credentials['client_id'], credentials['client_secret']
 
 
-# client 정보 로드
-client_id, client_pw = load_client_info()
-
-
-def getRequestUrl(url):
+# 네이버 뉴스 API 호출 및 데이터 가져오기
+def get_naver_search(client_id, client_secret, query, start=1, display=100):
+    url = f"https://openapi.naver.com/v1/search/news.json?query={urllib.parse.quote(query)}&start={start}&display={display}"
     req = urllib.request.Request(url)
     req.add_header("X-Naver-Client-Id", client_id)
-    req.add_header("X-Naver-Client-Secret", client_pw)
+    req.add_header("X-Naver-Client-Secret", client_secret)
 
     try:
+        # API 요청 전송 및 응답 확인
         response = urllib.request.urlopen(req)
         if response.getcode() == 200:
-            print("[%s] Url Request Success" % datetime.datetime.now())
-            return response.read().decode('utf-8')
+            print(f"[{datetime.datetime.now()}] Url Request Success")
+            return json.loads(response.read().decode('utf-8'))
     except Exception as e:
+        # 오류
         print(e)
-        print("[%s] Error for URL : %s" % (datetime.datetime.now(), url))
+        print(f"[{datetime.datetime.now()}] Error for URL : {url}")
         return None
 
 
-def getNaverSearch(node, srcText, start, display):
-    base = "https://openapi.naver.com/v1/search"
-    node = "/%s.json" % node
-    parameters = "?query=%s&start=%s&display=%s" % (urllib.parse.quote(srcText), start, display)
+# 뉴스 데이터 추출 및 저장
+def fetch_and_save_news(client_id, client_secret, region):
+    query = f"{region} 축제"
+    json_result = []
+    start, cnt = 1, 0
 
-    url = base + node + parameters
-    responseDecode = getRequestUrl(url)
+    while True:
+        response = get_naver_search(client_id, client_secret, query, start)
+        if response is None or response['display'] == 0:
+            break  # 데이터가 없으면 반복 종료
 
-    if (responseDecode == None):
-        return None
-    else:
-        return json.loads(responseDecode)
-
-
-def getPostData(post, jsonResult, cnt):
-    title = post['title']
-    description = post['description']
-    link = post['link']
-
-    pDate = datetime.datetime.strptime(post['pubDate'], '%a, %d %b %Y %H:%M:%S +0900')
-    pDate = pDate.strftime('%Y-%m-%d')
-
-    jsonResult.append({'cnt': cnt, 'title': title, 'description': description, 'link': link, 'pDate': pDate})
-    return
-
-
-def main():
-    node = 'news'
-    topic = "축제"
-
-    cnt = 0
-    jsonResult = []
-
-    jsonResponse = getNaverSearch(node, topic, 1, 100)
-    total = jsonResponse['total']
-
-    while ((jsonResponse != None) and (jsonResponse['display'] != 0)):
-        for post in jsonResponse['items']:
+        for post in response['items']:
             cnt += 1
-            getPostData(post, jsonResult, cnt)
+            p_date = datetime.datetime.strptime(post['pubDate'], '%a, %d %b %Y %H:%M:%S +0900').strftime('%Y-%m-%d')
+            json_result.append({
+                'cnt': cnt,
+                'title': post['title'],
+                'description': post['description'],
+                'link': post['link'],
+                'pDate': p_date
+            })
 
-        start = jsonResponse['start'] + jsonResponse['display']
-        jsonResponse = getNaverSearch(node, topic, start, 100)
+        start += response['display']
 
-    print('전체 검색 : %d 건' % total)
-
-    output_file = '%s_naver_%s.json' % (topic, node)
-
+    # JSON 파일로 저장
+    region_file_map = {
+        "인천": "incheon",
+        "서울": "seoul",
+        "경기": "gyeonggi"
+    }
+    output_file = f"{region_file_map[region]}_naver_news.json"
     with open(output_file, 'w', encoding='utf8') as outfile:
-        jsonFile = json.dumps(jsonResult, indent=4, sort_keys=True, ensure_ascii=False)
-        outfile.write(jsonFile)
-
-    print('데이터 크롤링 완료' % (topic, node))
+        json.dump(json_result, outfile, indent=4, ensure_ascii=False)
+    print(f"{query} 크롤링 완료")
 
 
+# 메인 함수
 if __name__ == '__main__':
-    main()
+    client_id, client_secret = load_client_info()
+    regions = ["인천", "서울", "경기"]
+    for region in regions:
+        fetch_and_save_news(client_id, client_secret, region)
