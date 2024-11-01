@@ -12,8 +12,7 @@ import datetime
 import json
 
 # client id, pw를 JSON 파일에서 읽어오기
-# def load_client_info(filename='naver_client.json'):
-def load_client_info(filename='/content/naver_client.json'):
+def load_client_info(filename='naver_client.json'):
     with open(filename, 'r') as f:
         credentials = json.load(f)
     return credentials['client_id'], credentials['client_secret']
