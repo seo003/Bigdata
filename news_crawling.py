@@ -18,10 +18,10 @@ def load_client_info(filename='naver_client.json'):
     return credentials['client_id'], credentials['client_secret']
 
 # 네이버 뉴스 API 호출 및 데이터 가져오기
-def get_naver_search(client_id, client_secret, query, start=1, display=100, start_date=None, end_date=None):
+def get_naver_search(client_id, client_secret, query, start=1, display=30, start_date=None, end_date=None):
     url = f"https://openapi.naver.com/v1/search/news.json?query={urllib.parse.quote(query)}&start={start}&display={display}"
 
-    # 날짜 필터 추가
+    # 날짜 필터
     if start_date and end_date:
         url += f"&startDate={start_date}&endDate={end_date}"
 
@@ -36,57 +36,60 @@ def get_naver_search(client_id, client_secret, query, start=1, display=100, star
             print(f"[{datetime.datetime.now()}] Url Request Success")
             return json.loads(response.read().decode('utf-8'))
     except Exception as e:
-        # 오류
         print(e)
         print(f"[{datetime.datetime.now()}] Error for URL : {url}")
         return None
 
 # 뉴스 데이터 추출 및 저장
-def fetch_and_save_news(client_id, client_secret, region, month, year):
+def fetch_and_save_news(client_id, client_secret, region, start_year, end_year):
     query = f"{region} 축제"
     json_result = []
-    start, cnt = 1, 0
-
-    # 날짜 범위 설정
-    start_date = f"{year}-{month:02d}-01"
-    if month == 12:
-        end_date = f"{year + 1}-01-01"
-    else:
-        end_date = f"{year}-{month + 1:02d}-01"
-
-    while True:
-        response = get_naver_search(client_id, client_secret, query, start, start_date=start_date, end_date=end_date)
-        if response is None or response['display'] == 0:
-            break  # 데이터가 없으면 반복 종료
-
-        for post in response['items']:
-            if cnt >= 500:  # 500개 저장
-                break
-            cnt += 1
-            json_result.append({
-                'cnt': cnt,
-                'title': post['title'],
-                'description': post['description']
-            })
-
-        start += response['display']
-
-    # JSON 파일로 저장
     region_file_map = {
         "인천": "incheon",
         "서울": "seoul",
         "경기": "gyeonggi"
     }
-    output_file = f"{region_file_map[region]}_{year}_{month}_news.json"
+
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            start, cnt = 1, 0
+
+            start_date = f"{year}-{month:02d}-01"
+            if month == 12:
+                end_date = f"{year + 1}-01-01"
+            else:
+                end_date = f"{year}-{month + 1:02d}-01"
+
+            while cnt < 10:  # 월별로 10개 기사 크롤링
+                response = get_naver_search(client_id, client_secret, query, start, display=10, start_date=start_date, end_date=end_date)
+                if response is None or response['display'] == 0:
+                    break
+
+                for post in response['items']:
+                    if cnt >= 10:
+                        break
+                    cnt += 1
+                    json_result.append({
+                        'year': year,
+                        'month': month,
+                        'title': post['title'],
+                        'description': post['description']
+                    })
+
+                start += response['display']
+
+    # 지역별 JSON 파일로 저장
+    output_file = f"{region_file_map[region]}_{start_year}_{end_year}_news.json"
     with open(output_file, 'w', encoding='utf8') as outfile:
         json.dump(json_result, outfile, indent=4, ensure_ascii=False)
-    print(f"{query} 크롤링 완료")
+    print(f"{region} 크롤링 완료")
 
 # 메인 함수
 if __name__ == '__main__':
     client_id, client_secret = load_client_info()
     regions = ["인천", "서울", "경기"]
-    year = 2024
-    month = 1
+    start_year = 2003
+    end_year = 2024
+
     for region in regions:
-        fetch_and_save_news(client_id, client_secret, region, month, year)
+        fetch_and_save_news(client_id, client_secret, region, start_year, end_year)
